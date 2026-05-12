@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let skyStar = null;                   // 缓存 Sky 星引用
     let longPressTimer = null;            // 长按计时器
     let isLongPressing = false;           // 是否正在长按
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
     // 管理权限
     let adminAuthed = false;
@@ -486,8 +487,9 @@ document.addEventListener('DOMContentLoaded', function () {
             tooltipComments.innerHTML = '';
         }
 
-        tooltip.style.left = mx + 'px';
-        tooltip.style.top = my + 'px';
+        tooltip.style.left = '0px';
+        tooltip.style.top = '0px';
+        tooltip.style.transform = 'translate(' + mx + 'px, ' + my + 'px) translate(-50%, -130%)';
         tooltip.classList.add('show');
         starCanvas.style.cursor = 'pointer';
     }
@@ -550,7 +552,9 @@ document.addEventListener('DOMContentLoaded', function () {
         updatePlaceBtn();
         updateCounter();
         showToast('✨ 你的星已点亮');
-        gsap.fromTo(starCanvas, { filter: 'brightness(2)' }, { filter: 'brightness(1)', duration: 0.6, ease: 'power2.out' });
+        if (!isTouchDevice) {
+            gsap.fromTo(starCanvas, { filter: 'brightness(2)' }, { filter: 'brightness(1)', duration: 0.6, ease: 'power2.out' });
+        }
         pushStarsToBin(stars).catch(() => {});
     }
 
@@ -731,7 +735,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     updatePlaceBtn();
                 }
             }
-            if (stars.length !== oldCount) {
+            if (stars.length !== oldCount && !isTouchDevice) {
                 gsap.fromTo(starCanvas, { filter: 'brightness(1.15)' }, { filter: 'brightness(1)', duration: 0.8, ease: 'power2.out' });
             }
         }).catch(err => {

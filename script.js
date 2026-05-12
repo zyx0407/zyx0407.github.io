@@ -190,16 +190,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function drawConnection(from, to, type, starA, starB) {
         // type: 'linked' | 'hover' | 'selected'
-        // 距离限制已在 render 层处理，这里只负责绘制
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 1) return;
 
-        // 根据类型使用不同参考距离计算 closeness
         let refDist;
         if (type === 'linked') {
-            refDist = Math.sqrt(canvasW * canvasW + canvasH * canvasH) * 0.55; // 与 render 层 linkedMaxDist 一致
+            refDist = Math.sqrt(canvasW * canvasW + canvasH * canvasH) * 0.55;
         } else {
             refDist = Math.min(canvasW, canvasH) * 0.45;
         }
@@ -213,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 lineWidth = 1.2;
                 dash = [];
                 dashOffset = 0;
-                color = `rgba(184,134,11,${alpha})`; // 金色实链接加粗
+                color = `rgba(184,134,11,${alpha})`;
                 break;
             case 'selected':
                 alpha = closeness * 0.7;
@@ -229,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 dashOffset = -animFrame * 0.35;
                 color = `rgba(255,255,255,${alpha})`;
                 break;
-            default: // ambient
+            default:
                 alpha = closeness * 0.12;
                 lineWidth = 0.25;
                 dash = [2, 10];
@@ -252,10 +250,8 @@ document.addEventListener('DOMContentLoaded', function () {
         starCtx.stroke();
         starCtx.setLineDash([]);
 
-        // 星网：linked 线上双向流动光点
         if (isLinked && dist > 5 && starA && starB) {
             const dotCount = Math.floor(dist / 55) + 1;
-            // 正向：from → to（减慢流动速度 0.6 → 0.18）
             for (let d = 0; d < dotCount; d++) {
                 const raw = (animFrame * 0.18 + d * 97) % 300;
                 const phase = raw / 300;
@@ -273,11 +269,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 starCtx.fillStyle = dotGrad;
                 starCtx.fill();
             }
-            // 反向：to → from（相位偏移 0.5 避免重叠，减慢流动速度 0.6 → 0.18）
             for (let d = 0; d < dotCount; d++) {
                 const raw = (animFrame * 0.18 + d * 97 + 150) % 300;
                 const phase = raw / 300;
-                const t = 1 - ((phase + d / dotCount) % 1); // 反向
+                const t = 1 - ((phase + d / dotCount) % 1);
                 const px = from.x + dx * t;
                 const py = from.y + dy * t;
                 const dotAlpha = 0.35 + 0.45 * Math.sin(phase * Math.PI);
@@ -299,7 +294,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const cx = s.x, cy = s.y;
         const baseR = isMine ? 3.5 : (isHovered || isSelected ? 4.5 : 2.5);
 
-        // 外层光晕
         const glowGrad = starCtx.createRadialGradient(cx, cy, 0, cx, cy, baseR * 5);
         const glowAlpha = (isHovered || isSelected) ? 0.9 : 0.6;
         glowGrad.addColorStop(0, `rgba(255,255,255,${glowAlpha})`);
@@ -311,7 +305,6 @@ document.addEventListener('DOMContentLoaded', function () {
         starCtx.fillStyle = glowGrad;
         starCtx.fill();
 
-        // 中核
         const coreGrad = starCtx.createRadialGradient(cx, cy, 0, cx, cy, baseR);
         coreGrad.addColorStop(0, '#ffffff');
         coreGrad.addColorStop(0.6, 'rgba(255,255,255,0.8)');
@@ -321,7 +314,6 @@ document.addEventListener('DOMContentLoaded', function () {
         starCtx.fillStyle = coreGrad;
         starCtx.fill();
 
-        // 自己放的星：金色环
         if (isMine) {
             starCtx.beginPath();
             starCtx.arc(cx, cy, baseR + 3, 0, Math.PI * 2);
@@ -333,7 +325,6 @@ document.addEventListener('DOMContentLoaded', function () {
             starCtx.setLineDash([]);
         }
 
-        // 选中高亮环
         if (isSelected && !isMine) {
             starCtx.beginPath();
             starCtx.arc(cx, cy, baseR + 3.5, 0, Math.PI * 2);
@@ -345,7 +336,6 @@ document.addEventListener('DOMContentLoaded', function () {
             starCtx.setLineDash([]);
         }
 
-        // 悬停十字线
         if (isHovered) {
             const crossLen = baseR + 6;
             starCtx.strokeStyle = 'rgba(255,255,255,0.5)';
@@ -364,12 +354,6 @@ document.addEventListener('DOMContentLoaded', function () {
         starCtx.clearRect(0, 0, canvasW, canvasH);
         bgStars.forEach(drawBgStar);
 
-        const myStar = getMyStar();
-        const mySx = myStar ? myStar.x * canvasW : null;
-        const mySy = myStar ? myStar.y * canvasH : null;
-
-        // 收集需求连线的对：一个 map 记录 (id1 <-> id2) 的连线类型优先级
-        // 优先级：linked > hover/selected > ambient
         const connMap = new Map();
 
         function connKey(a, b) {
@@ -385,10 +369,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // 用户星星之间的连线
         const diagonal = Math.sqrt(canvasW * canvasW + canvasH * canvasH);
-        const linkedMaxDist = diagonal * 0.55;   // 金色实线：对角线55%，基本覆盖全屏
-        const highlightMaxDist = diagonal * 0.35; // 选中/悬停虚线
+        const linkedMaxDist = diagonal * 0.55;
+        const highlightMaxDist = diagonal * 0.35;
 
         for (let i = 0; i < stars.length; i++) {
             const si = stars[i];
@@ -401,7 +384,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 const sjy = sj.y * canvasH;
                 const dist = Math.sqrt((six - sjx) ** 2 + (siy - sjy) ** 2);
 
-                // 全局星网：任两颗互链的星都显示金色实线（基本不限距离）
                 const mutualLinked =
                     (si.links && si.links.includes(sj.id)) ||
                     (sj.links && sj.links.includes(si.id));
@@ -412,7 +394,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     continue;
                 }
 
-                // 悬停/选中高亮
                 if (dist > highlightMaxDist) continue;
                 if (si.id === hoveredId || sj.id === hoveredId) {
                     setConn(si.id, sj.id, 'hover');
@@ -422,7 +403,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // 渲染连线
         connMap.forEach((type, key) => {
             const [idA, idB] = key.split('::');
             const starA = stars.find(s => s.id === idA);
@@ -436,7 +416,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // 星星
         stars.forEach(s => {
             const sx = s.x * canvasW;
             const sy = s.y * canvasH;
@@ -480,7 +459,6 @@ document.addEventListener('DOMContentLoaded', function () {
         tooltipMsg.textContent = s.msg || '';
         tooltipMsg.style.display = s.msg ? 'block' : 'none';
 
-        // 显示评论（带删除按钮）
         if (s.comments && s.comments.length > 0) {
             tooltipComments.classList.add('has-comments');
             tooltipComments.innerHTML = s.comments.slice(-3).map((c, idx) => {
@@ -493,7 +471,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     escapeHtml(c.author) + '：</span>' + escapeHtml(c.text) + delBtn + '</div>';
             }).join('');
 
-            // 绑定删除事件
             setTimeout(() => {
                 tooltipComments.querySelectorAll('.comment-delete').forEach(btn => {
                     btn.addEventListener('click', function (e) {
@@ -527,13 +504,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!targetStar || !targetStar.comments) return;
         targetStar.comments.splice(commentIdx, 1);
 
-        // 如果该星不再有来自 myStarName 的评论，从 links 中移除
         if (myStarId && targetStar.id !== myStarId) {
             const hasMyComment = targetStar.comments.some(c => c.author === myStarName);
             if (!hasMyComment && targetStar.links) {
                 targetStar.links = targetStar.links.filter(lid => lid !== myStarId);
             }
-            // 同时从我的星 links 中移除
             const myStar = getMyStar();
             if (myStar && myStar.links && !hasMyComment) {
                 myStar.links = myStar.links.filter(lid => lid !== targetStar.id);
@@ -542,7 +517,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         pushStarsToBin(stars).catch(() => {});
         showToast('🗑 评论已删除');
-        // 刷新 tooltip
         const hit = hitTest(mouseX, mouseY);
         if (hit) updateTooltip(hit, mouseX, mouseY);
     }
@@ -660,7 +634,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!targetStar.comments) targetStar.comments = [];
             targetStar.comments.push(comment);
 
-            // 建立链接关系
             if (!targetStar.links) targetStar.links = [];
             if (!targetStar.links.includes(myStarId)) {
                 targetStar.links.push(myStarId);
@@ -696,7 +669,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function pushStarsToBin(allStars) {
         isPushing = true;
-        // 始终保留种子星（不受 200 条截断影响）
         const sliced = allStars.slice(-200);
         const seedStars = allStars.filter(s => s.id === SKY_ID);
         for (const seed of seedStars) {
@@ -726,7 +698,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function saveLocalStars(allStars) {
-        // 保留种子星，与 pushStarsToBin 一致
         const sliced = allStars.slice(-200);
         const seedStars = allStars.filter(s => s.id === SKY_ID);
         for (const seed of seedStars) {
@@ -736,24 +707,17 @@ document.addEventListener('DOMContentLoaded', function () {
         catch (e) { }
     }
 
-    function mergeStars(remote, local) {
-        const map = new Map();
-        remote.forEach(s => map.set(s.id, s));
-        local.forEach(s => { if (!map.has(s.id)) map.set(s.id, s); });
-        return Array.from(map.values()).sort((a, b) => a.time - b.time);
-    }
-
     let syncInterval = null;
 
     function syncStars() {
-        if (isPushing) return; // 写入进行中，跳过本周期
-        if (adminPanelOpen) return; // 管理面板优先：暂停同步防止覆盖管理员修改
+        if (isPushing) return;
+        if (adminPanelOpen) return;
         fetchStarsFromBin().then(remote => {
-            if (isPushing) return; // 二次检查
-            const local = getLocalStars();
-            const merged = mergeStars(remote, local);
+            if (isPushing) return;
+            saveLocalStars(remote);
             const oldCount = stars.length;
-            stars = merged;
+            // 远程数据为权威源，不再合并本地（避免管理员删除后被本地恢复）
+            stars = remote.slice();
             updateCounter();
             if (myStarId) {
                 const my = stars.find(s => s.id === myStarId);
@@ -773,9 +737,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(err => {
             if (isPushing) return;
             console.warn('同步失败，保持现有数据:', err);
-            // 不清空 stars，保持当前显示的数据
             if (stars.length === 0) {
-                // 只有在 stars 为空时才回退到本地数据
                 stars = getLocalStars();
                 updateCounter();
             }
@@ -783,7 +745,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ==================== 事件 ====================
-    // mousemove 节流：用 rAF 确保每帧最多一次 hitTest
     function onMouseMove(e) {
         mouseX = e.clientX;
         mouseY = e.clientY;
@@ -805,7 +766,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 showToast('✨ 这是你的星');
                 return;
             }
-            // Sky 星：长按已打开管理面板，跳过评论栏
             if (hit.id === SKY_ID) {
                 if (isLongPressing) {
                     isLongPressing = false;
@@ -818,7 +778,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // 点击空白：关闭评论栏
         if (selectedStarId) {
             closeCommentBar();
         }
@@ -828,7 +787,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // ---- 长按 Sky 星打开管理面板 ----
     function onPointerDown(e) {
         const hit = hitTest(e.clientX, e.clientY);
         if (!hit || hit.id !== SKY_ID) {
@@ -846,7 +804,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function onPointerUp(e) {
         setTimeout(() => {
             cancelLongPress();
-        }, 100); // 延迟清除，让 click 事件能检测到 isLongPressing
+        }, 100);
     }
 
     function cancelLongPress() {
@@ -854,10 +812,8 @@ document.addEventListener('DOMContentLoaded', function () {
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }
-        // 注意：不在此处重置 isLongPressing，留给 onClick 判断
     }
 
-    // resize 防抖：150ms 内连续 resize 只触发一次
     function onResize() {
         if (resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
@@ -880,7 +836,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // ==================== 管理后台 ====================
     function openAdmin() {
         adminPanelOpen = true;
-        // 管理面板打开时暂停定时同步，防止覆盖管理员修改
         if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
         adminPanel.classList.add('open');
         if (!adminAuthed) {
@@ -898,7 +853,6 @@ document.addEventListener('DOMContentLoaded', function () {
     function closeAdmin() {
         adminPanelOpen = false;
         adminPanel.classList.remove('open');
-        // 恢复定时同步
         if (!syncInterval) syncInterval = setInterval(syncStars, 6000);
     }
 
@@ -945,7 +899,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
 
-            // 保存修改
             card.querySelector('.admin-save-star').addEventListener('click', () => {
                 star.name = card.querySelector('.adm-name').value.trim() || '无名';
                 star.msg = card.querySelector('.adm-msg').value.trim().slice(0, 20);
@@ -954,7 +907,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!isNaN(nx) && nx >= 0 && nx <= 1) star.x = nx;
                 if (!isNaN(ny) && ny >= 0 && ny <= 1) star.y = ny;
 
-                // 更新评论
                 const commentInputs = card.querySelectorAll('.adm-comment');
                 commentInputs.forEach(inp => {
                     const idx = parseInt(inp.dataset.idx);
@@ -968,11 +920,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (myStarId === star.id) myStarName = star.name;
             });
 
-            // 删除整颗星
             card.querySelector('.admin-del-star').addEventListener('click', () => {
                 if (confirm('确定删除这颗星 "' + (star.name || '无名') + '" 吗？')) {
                     stars = stars.filter(s => s.id !== star.id);
-                    // 清理其他星中对该星的 links
                     stars.forEach(s => {
                         if (s.links) s.links = s.links.filter(lid => lid !== star.id);
                     });
@@ -986,7 +936,6 @@ document.addEventListener('DOMContentLoaded', function () {
             adminList.appendChild(card);
         });
 
-        // 重新绑定所有 del-comment-btn
         adminList.querySelectorAll('.del-comment-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const card = this.closest('.admin-star-card');
@@ -1003,14 +952,12 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // 管理后台事件绑定
     adminClose.addEventListener('click', closeAdmin);
     adminLoginBtn.addEventListener('click', adminAuth);
     adminPw.addEventListener('keydown', (e) => { if (e.key === 'Enter') adminAuth(); });
     adminRefresh.addEventListener('click', () => { syncStars(); setTimeout(renderAdminList, 500); showToast('🔄 已刷新'); });
     adminLogout.addEventListener('click', adminDoLogout);
 
-    // 点击面板外部关闭 -- 顶部滑下面板：点下方区域关闭
     starCanvas.addEventListener('click', function (e) {
         if (adminPanel.classList.contains('open')) {
             const rect = adminPanel.getBoundingClientRect();
@@ -1047,12 +994,10 @@ document.addEventListener('DOMContentLoaded', function () {
         resizeCanvas();
         loadPlacedFlag();
 
-        // 使用预加载数据（与 ring 动画并行完成的），失败则回退 fetch
         function initWithData(remote) {
-            const local = getLocalStars();
-            stars = mergeStars(remote, local);
+            // 远程数据为权威源，不再合并本地（避免管理员删除后被本地恢复）
+            stars = remote.slice();
 
-            // 种子星 Sky 
             let seedInserted = false;
             const OLD_SEED_ID = 'seed_cline_2026';
             const hadOldSeed = stars.some(s => s.id === OLD_SEED_ID);
@@ -1072,14 +1017,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             updateCounter();
             let needPush = seedInserted || hadOldSeed;
-            if (myStarId && !stars.find(s => s.id === myStarId)) {
-                const localAll = getLocalStars();
-                const myStar = localAll.find(s => s.id === myStarId);
-                if (myStar) {
-                    stars.push(myStar);
-                    needPush = true;
-                }
-            }
             if (needPush) pushStarsToBin(stars).catch(() => {});
             if (myStarId) {
                 const my = stars.find(s => s.id === myStarId);
@@ -1100,7 +1037,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (preloadedStars.length > 0) {
             initWithData(preloadedStars);
         } else {
-            // 预加载失败，回退到异步 fetch
             fetchStarsFromBin().then(initWithData).catch(() => {
                 initWithData(getLocalStars());
                 saveLocalStars(stars);
@@ -1111,12 +1047,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         window.addEventListener('mousemove', onMouseMove, { passive: true });
         starCanvas.addEventListener('click', onClick);
-        // 长按 Sky 星触发管理面板
         starCanvas.addEventListener('pointerdown', onPointerDown);
         starCanvas.addEventListener('pointerup', onPointerUp);
         starCanvas.addEventListener('pointerleave', onPointerUp);
         starCanvas.addEventListener('pointercancel', onPointerUp);
-        // 阻止移动端长按菜单
         starCanvas.addEventListener('contextmenu', e => e.preventDefault());
         starCanvas.style.touchAction = 'none';
         placeBtn.addEventListener('click', () => {
@@ -1129,7 +1063,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         window.addEventListener('resize', onResize);
 
-        // 评论栏事件
         commentSend.addEventListener('click', submitComment);
         commentClose.addEventListener('click', closeCommentBar);
         commentInput.addEventListener('keydown', (e) => {

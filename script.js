@@ -757,7 +757,15 @@ document.addEventListener('DOMContentLoaded', function () {
             updateCounter();
             if (myStarId) {
                 const my = stars.find(s => s.id === myStarId);
-                if (my) myStarName = my.name;
+                if (my) {
+                    myStarName = my.name;
+                } else {
+                    // 星已被管理员删除，清除 placed 状态允许重新点亮
+                    myStarId = null;
+                    placed = false;
+                    try { localStorage.removeItem('ajiu_star_placed'); } catch (e) {}
+                    updatePlaceBtn();
+                }
             }
             if (stars.length !== oldCount) {
                 gsap.fromTo(starCanvas, { filter: 'brightness(1.15)' }, { filter: 'brightness(1)', duration: 0.8, ease: 'power2.out' });
@@ -1075,7 +1083,17 @@ document.addEventListener('DOMContentLoaded', function () {
             if (needPush) pushStarsToBin(stars).catch(() => {});
             if (myStarId) {
                 const my = stars.find(s => s.id === myStarId);
-                if (my) { myStarName = my.name; placed = true; updatePlaceBtn(); }
+                if (my) {
+                    myStarName = my.name;
+                    placed = true;
+                    updatePlaceBtn();
+                } else {
+                    // 星已被管理员删除，清除 placed 状态允许重新点亮
+                    myStarId = null;
+                    placed = false;
+                    try { localStorage.removeItem('ajiu_star_placed'); } catch (e) {}
+                    updatePlaceBtn();
+                }
             }
         }
 

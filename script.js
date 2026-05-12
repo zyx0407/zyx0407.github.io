@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .to(ringContainer, { scale: 1.05, duration: 1.1, ease: "sine.inOut" }, "-=1.3")
         .to(ringContainer, { scale: 1.0,  duration: 1.1, ease: "sine.inOut" }, "-=0.55")
         .to(ringButton,   { opacity: 1, duration: 0.65, ease: "power3.out" }, "-=0.3");
-    gsap.to(ringContainer, { scale: 1.04, duration: 2.0, yoyo: true, repeat: -1, ease: "sine.inOut", delay: 2.3 });
+    const ringBreath = gsap.to(ringContainer, { scale: 1.04, duration: 2.0, yoyo: true, repeat: -1, ease: "sine.inOut", delay: 2.3 });
 
     // 立即发起数据预加载，与 ring 动画并行
     (async function preloadData() {
@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
     ringButton.addEventListener('click', function () {
         if (!ready) return;
         ready = false;
+        if (ringBreath) ringBreath.kill();
 
         const exitTl = gsap.timeline();
         exitTl.to(ringContainer, { scale: 0.45, opacity: 0, duration: 0.42, ease: "power2.in" });
@@ -251,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
         starCtx.stroke();
         starCtx.setLineDash([]);
 
-        if (isLinked && dist > 5 && starA && starB) {
+        if (isLinked && !isTouchDevice && dist > 5 && starA && starB) {
             const dotCount = Math.floor(dist / 55) + 1;
             for (let d = 0; d < dotCount; d++) {
                 const raw = (animFrame * 0.18 + d * 97) % 300;
@@ -828,10 +829,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function startLoop() {
         if (raf) cancelAnimationFrame(raf);
+        const skipFrames = isTouchDevice ? 1 : 0;
+        let tick = 0;
         function loop() {
             animFrame++;
             if (animFrame > 100000) animFrame = 0;
-            render();
+            tick++;
+            if (tick > skipFrames) {
+                tick = 0;
+                render();
+            }
             raf = requestAnimationFrame(loop);
         }
         loop();

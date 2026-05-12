@@ -1,0 +1,623 @@
+/* ============================================================
+   阿玖 · 星座
+   点阵星空 + 自动连线 + 留言 + 评论
+   ============================================================ */
+
+/* Google Fonts removed — blocked in China, use system fonts instead */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #000;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ================================================================
+   星空页
+   ================================================================ */
+.card-page {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 0;
+    opacity: 0;
+    cursor: crosshair;
+}
+
+.star-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ---- tooltip ---- */
+.star-tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    transform: translate(-50%, -130%);
+    background: rgba(10, 10, 10, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.85rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    white-space: nowrap;
+    transition: opacity 0.2s ease;
+}
+.star-tooltip.show { opacity: 1; }
+.tooltip-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fafaf8;
+    letter-spacing: 0.04em;
+}
+.tooltip-msg {
+    font-size: 0.68rem;
+    color: #888;
+    margin-top: 0.15rem;
+    max-width: 14em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tooltip-comments {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: none;
+}
+.tooltip-comments.has-comments { display: block; }
+.tooltip-comment-line {
+    font-size: 0.64rem;
+    color: #666;
+    line-height: 1.4;
+    max-width: 16em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+.tooltip-comment-line .comment-author { color: rgba(255,255,255,0.5); }
+.tooltip-comment-line .comment-delete {
+    color: rgba(255,80,80,0.4);
+    cursor: pointer;
+    pointer-events: auto;
+    font-size: 0.55rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.tooltip-comment-line:hover .comment-delete { opacity: 1; }
+.tooltip-comment-line .comment-delete:hover { color: rgba(255,80,80,0.8); }
+
+/* ---- 底部控制栏 ---- */
+.star-controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    padding: 1.2rem 1.2rem 1.8rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.5) 65%, transparent 100%);
+    pointer-events: none;
+}
+.star-controls > * { pointer-events: auto; }
+
+.star-counter {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+    margin-bottom: 0.1rem;
+}
+.star-counter .count-num {
+    font-family: 'Times New Roman', serif;
+    font-weight: 600;
+    color: #b8860b;
+    font-size: 1rem;
+}
+
+.control-row {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 420px;
+    justify-content: center;
+}
+
+.name-input, .msg-input {
+    flex: 1;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.8rem;
+    font-family: inherit;
+    color: #fafaf8;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.35s ease, background 0.35s ease, box-shadow 0.35s ease;
+}
+.name-input:focus, .msg-input:focus {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: 0 0 20px rgba(255,255,255,0.03);
+}
+.name-input::placeholder, .msg-input::placeholder {
+    color: rgba(255, 255, 255, 0.18);
+}
+
+.place-btn {
+    padding: 0.55rem 1.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 2rem;
+    background: transparent;
+    color: #fafaf8;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.35s ease;
+    white-space: nowrap;
+}
+.place-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 30px rgba(255,255,255,0.04);
+}
+.place-btn:active {
+    transform: scale(0.96);
+}
+.place-btn.placed {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.place-btn.placed:hover {
+    background: transparent;
+    box-shadow: none;
+}
+
+.hint-text {
+    font-size: 0.66rem;
+    color: rgba(255, 255, 255, 0.22);
+    letter-spacing: 0.06em;
+    text-align: center;
+}
+
+/* ---- toast ---- */
+.star-toast {
+    position: fixed;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: #fafaf8;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2rem;
+    padding: 0.45rem 1.2rem;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---- 评论栏 ---- */
+.comment-bar {
+    position: fixed;
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.7rem;
+    background: rgba(10, 10, 10, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 2rem;
+    opacity: 0;
+    pointer-events: none;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: opacity 0.3s ease, transform 0.35s ease;
+}
+.comment-bar.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+.comment-target {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.6);
+    white-space: nowrap;
+    padding: 0 0.2rem;
+}
+.comment-input {
+    width: 180px;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 1rem;
+    background: rgba(255,255,255,0.04);
+    font-size: 0.74rem;
+    font-family: inherit;
+    color: #fafaf8;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.3s ease, background 0.3s ease;
+}
+.comment-input:focus {
+    border-color: rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.07);
+}
+.comment-input::placeholder { color: rgba(255,255,255,0.15); }
+.comment-send {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 1rem;
+    background: transparent;
+    color: #fafaf8;
+    font-family: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+.comment-send:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.35); }
+.comment-close {
+    padding: 0.35rem 0.5rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(255,255,255,0.35);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: color 0.2s;
+}
+.comment-close:hover { color: rgba(255,255,255,0.7); }
+
+
+/* ---- 管理后台面板（从上方滑下） ---- */
+.admin-panel {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    max-height: min(520px, 85vh);
+    z-index: 6;
+    background: rgba(8,8,8,0.97);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    flex-direction: column;
+    transform: translateY(-100%);
+    transition: transform 0.4s ease;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+.admin-panel.open { transform: translateY(0); }
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.admin-title {
+    color: #fafaf8;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+.admin-close {
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,0.4);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.admin-close:hover { color: rgba(255,255,255,0.8); }
+
+.admin-login {
+    padding: 2rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    align-items: center;
+}
+.admin-pw {
+    width: 100%;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 0.5rem;
+    background: rgba(255,255,255,0.04);
+    font-size: 0.8rem;
+    font-family: inherit;
+    color: #fafaf8;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.3s ease;
+}
+.admin-pw:focus { border-color: rgba(255,255,255,0.35); }
+.admin-login-btn {
+    padding: 0.5rem 2rem;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 2rem;
+    background: transparent;
+    color: #fafaf8;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.admin-login-btn:hover { background: rgba(255,255,255,0.07); }
+.admin-hint {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.2);
+    margin-top: 0.3rem;
+}
+
+.admin-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.admin-actions-top {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.8rem 1.2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.admin-btn-sm {
+    padding: 0.35rem 0.8rem;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 1rem;
+    background: transparent;
+    color: rgba(255,255,255,0.6);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+.admin-btn-sm:hover { background: rgba(255,255,255,0.06); color: #fafaf8; }
+.admin-btn-sm.danger { color: rgba(255,80,80,0.5); }
+.admin-btn-sm.danger:hover { color: rgba(255,80,80,0.9); }
+
+.admin-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.6rem 1rem;
+}
+.admin-list::-webkit-scrollbar { width: 3px; }
+.admin-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.admin-star-card {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.85rem;
+    margin-bottom: 0.55rem;
+    font-size: 0.7rem;
+    color: #999;
+}
+
+.admin-star-card .admin-star-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+}
+.admin-star-card .admin-star-row label {
+    color: rgba(255,255,255,0.35);
+    white-space: nowrap;
+    font-size: 0.65rem;
+}
+.admin-star-card .admin-star-row input,
+.admin-star-card .admin-star-row textarea {
+    flex: 1;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 0.3rem;
+    background: rgba(0,0,0,0.3);
+    color: #ccc;
+    font-size: 0.68rem;
+    font-family: inherit;
+    outline: none;
+    min-width: 0;
+}
+.admin-star-card .admin-star-row textarea {
+    resize: vertical;
+    min-height: 2rem;
+    font-size: 0.65rem;
+}
+.admin-star-card .admin-star-row input:focus,
+.admin-star-card .admin-star-row textarea:focus {
+    border-color: rgba(255,255,255,0.25);
+}
+
+.admin-star-card .admin-comment-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0 0.15rem 0.5rem;
+    font-size: 0.63rem;
+}
+.admin-star-card .admin-comment-item input {
+    flex: 1;
+    padding: 0.2rem 0.35rem;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0.25rem;
+    background: rgba(0,0,0,0.3);
+    color: #aaa;
+    font-size: 0.62rem;
+    font-family: inherit;
+    outline: none;
+}
+.admin-star-card .admin-comment-item input:focus { border-color: rgba(255,255,255,0.2); }
+.admin-star-card .admin-comment-item .del-comment-btn {
+    border: none;
+    background: transparent;
+    color: rgba(255,80,80,0.35);
+    cursor: pointer;
+    font-size: 0.6rem;
+    padding: 0.1rem 0.25rem;
+}
+.admin-star-card .admin-comment-item .del-comment-btn:hover { color: rgba(255,80,80,0.8); }
+
+.admin-star-card .admin-save-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+}
+.admin-star-card .admin-save-row button {
+    padding: 0.25rem 0.7rem;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 1rem;
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.25s;
+}
+.admin-star-card .admin-save-row button:hover { background: rgba(255,255,255,0.07); color: #fafaf8; }
+.admin-star-card .admin-save-row button.danger-del { color: rgba(255,80,80,0.45); }
+.admin-star-card .admin-save-row button.danger-del:hover { color: rgba(255,80,80,0.9); border-color: rgba(255,80,80,0.3); }
+
+/* ================================================================
+   转场歌词层
+   ================================================================ */
+.lyric-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 11;
+    pointer-events: none;
+    opacity: 0;
+    background: #0d0d0d;
+}
+
+.lyric-text {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 200;
+    font-style: italic;
+    letter-spacing: 0.08em;
+    padding-left: 0.08em;
+    color: rgba(255, 255, 255, 0.92);
+    text-align: center;
+    line-height: 1.4;
+    max-width: 85vw;
+}
+.lyric-text .char {
+    display: inline-block;
+    opacity: 0;
+    filter: blur(6px);
+    will-change: filter, opacity, transform;
+}
+
+/* ================================================================
+   圆形遮罩层
+   ================================================================ */
+.circle-mask {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 5;
+    clip-path: circle(0% at 50% 50%);
+    -webkit-clip-path: circle(0% at 50% 50%);
+    transition: clip-path 1.3s cubic-bezier(0.65, 0, 0.35, 1), -webkit-clip-path 1.3s cubic-bezier(0.65, 0, 0.35, 1);
+    will-change: clip-path, -webkit-clip-path;
+}
+.circle-mask.expand {
+    clip-path: circle(150% at 50% 50%);
+    -webkit-clip-path: circle(150% at 50% 50%);
+}
+
+/* ================================================================
+   预加载层
+   ================================================================ */
+.preloader {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: #0d0d0d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.ring-container {
+    position: relative;
+    width: clamp(130px, 30vw, 180px);
+    height: clamp(130px, 30vw, 180px);
+}
+
+.ring-container svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.ring-track { opacity: 0.3; }
+.ring-fill  { opacity: 1; }
+
+.ring-button {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: clamp(0.6rem, 1.4vw, 0.72rem);
+    font-weight: 400;
+    letter-spacing: 0.25em;
+    padding-left: 0.25em;
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    padding: clamp(8px, 2vh, 12px) clamp(16px, 4vw, 24px);
+    white-space: nowrap;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.3s ease;
+}
+
+.ring-button:hover  { color: #aaa; }
+.ring-button:active {
+    color: #999;
+    transform: translate(-50%, -50%) scale(0.95);
+}

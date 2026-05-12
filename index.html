@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿玖 · 星座</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ==================== 星空页（最底层） ==================== -->
+    <div class="card-page" id="card-page">
+        <canvas class="star-canvas" id="star-canvas"></canvas>
+
+        <!-- 悬停 tooltip -->
+        <div class="star-tooltip" id="star-tooltip">
+            <div class="tooltip-name"></div>
+            <div class="tooltip-msg"></div>
+            <div class="tooltip-comments" id="tooltip-comments"></div>
+        </div>
+
+        <!-- 底部控制栏 -->
+        <div class="star-controls" id="star-controls">
+            <div class="star-counter" id="star-counter">已有 0 颗星</div>
+            <div class="control-row">
+                <input type="text" class="name-input" id="name-input" placeholder="你的名字" maxlength="8">
+                <input type="text" class="msg-input" id="msg-input" placeholder="想说的一句话（20字）" maxlength="20">
+            </div>
+            <button class="place-btn" id="place-btn">✦ 点亮一颗星</button>
+            <div class="hint-text">点击星空任意位置，放下一颗属于你的星</div>
+        </div>
+
+        <!-- 评论栏（点击他人星星后出现） -->
+        <div class="comment-bar" id="comment-bar">
+            <div class="comment-target" id="comment-target">💬 回复 </div>
+            <input type="text" class="comment-input" id="comment-input" placeholder="写一句评论（20字）" maxlength="20">
+            <button class="comment-send" id="comment-send">发送</button>
+            <button class="comment-close" id="comment-close">✕</button>
+        </div>
+
+        <!-- 通知浮层 -->
+        <div class="star-toast" id="star-toast"></div>
+
+        <!-- 管理后台面板（长按 Sky 触发，从上方滑下） -->
+        <div class="admin-panel" id="admin-panel">
+            <div class="admin-header">
+                <span class="admin-title">🔧 管理后台</span>
+                <button class="admin-close" id="admin-close">✕</button>
+            </div>
+            <div class="admin-login" id="admin-login">
+                <input type="password" class="admin-pw" id="admin-pw" placeholder="输入管理密码" maxlength="20">
+                <button class="admin-login-btn" id="admin-login-btn">验证</button>
+                <div class="admin-hint">提示：管理员权限</div>
+            </div>
+            <div class="admin-content" id="admin-content" style="display:none">
+                <div class="admin-actions-top">
+                    <button class="admin-btn-sm" id="admin-refresh">🔄 刷新数据</button>
+                    <button class="admin-btn-sm danger" id="admin-logout">退出</button>
+                </div>
+                <div class="admin-list" id="admin-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 圆形遮罩层 ==================== -->
+    <div class="circle-mask" id="circle-mask"></div>
+
+    <!-- ==================== 转场歌词层 ==================== -->
+    <div class="lyric-overlay" id="lyric-overlay">
+        <p class="lyric-text">Why do the stars shine so bright in the sky</p>
+    </div>
+
+    <!-- ==================== 预加载层 ==================== -->
+    <div class="preloader" id="preloader">
+        <div class="ring-container" id="ring-container">
+            <svg viewBox="0 0 100 100">
+                <circle class="ring-track" cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+                <circle class="ring-fill" id="ring-fill" cx="50" cy="50" r="45" fill="none" stroke="#fff" stroke-width="1.5"
+                    stroke-dasharray="283" stroke-dashoffset="283" stroke-linecap="round"/>
+            </svg>
+            <div class="ring-button" id="ring-button">ENTER</div>
+        </div>
+    </div>
+
+    <script src="gsap.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ================================================================
     //  星座引擎
     // ================================================================
-    const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/683f3c72e41b914e61da7b5a';
+    const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/6a03621cadc21f119a8d9d2c';
     const JSONBIN_KEY = '$2a$10$9rUyzHWd75AJ1uZXkAjcluIaU5YgwsYhvYO.Im37XwVLunftKAJTS';
 
     let stars = [];           // [{id, name, msg, x, y, time, comments, links}]

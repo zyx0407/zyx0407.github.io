@@ -691,7 +691,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const record = d && d.record && d.record.stars ? d.record.stars : [];
                 return Array.isArray(record) ? record : [];
             })
-            .catch(() => getLocalStars());
+            .catch(err => { console.warn('JSONBin fetch failed:', err); throw err; });
     }
 
     async function pushStarsToBin(allStars) {
@@ -762,10 +762,15 @@ document.addEventListener('DOMContentLoaded', function () {
             if (stars.length !== oldCount) {
                 gsap.fromTo(starCanvas, { filter: 'brightness(1.15)' }, { filter: 'brightness(1)', duration: 0.8, ease: 'power2.out' });
             }
-        }).catch(() => {
+        }).catch(err => {
             if (isPushing) return;
-            stars = getLocalStars();
-            updateCounter();
+            console.warn('同步失败，保持现有数据:', err);
+            // 不清空 stars，保持当前显示的数据
+            if (stars.length === 0) {
+                // 只有在 stars 为空时才回退到本地数据
+                stars = getLocalStars();
+                updateCounter();
+            }
         });
     }
 

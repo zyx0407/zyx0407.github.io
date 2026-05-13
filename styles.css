@@ -17,6 +17,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* ================================================================
@@ -39,6 +40,8 @@ body {
     width: 100%;
     height: 100%;
     display: block;
+    background: #000;
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* ---- tooltip ---- */
@@ -215,30 +218,23 @@ body {
    移动端优化
    ================================================================ */
 @media (max-width: 768px), (pointer: coarse) {
-    .star-tooltip {
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-        background: rgba(10, 10, 10, 0.95);
-    }
-    .comment-bar {
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-        background: rgba(10, 10, 10, 0.96);
-    }
-    .star-toast {
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-    }
-    .admin-panel {
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-        background: rgba(8,8,8,0.98);
-    }
     .circle-mask {
         will-change: auto;
     }
     .lyric-text .char {
         will-change: auto;
+    }
+    .place-btn,
+    .comment-send,
+    .comment-close,
+    .admin-btn-sm,
+    .admin-login-btn,
+    .admin-close,
+    .name-input,
+    .msg-input,
+    .comment-input,
+    .admin-pw {
+        -webkit-tap-highlight-color: transparent;
     }
 }
 

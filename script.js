@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
         starCtx.stroke();
         starCtx.setLineDash([]);
 
-        if (isLinked && !isTouchDevice && dist > 5 && starA && starB) {
+        if (isLinked && dist > 5 && starA && starB) {
             const dotCount = Math.floor(dist / 55) + 1;
             for (let d = 0; d < dotCount; d++) {
                 const raw = (animFrame * 0.18 + d * 97) % 300;
@@ -553,9 +553,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updatePlaceBtn();
         updateCounter();
         showToast('✨ 你的星已点亮');
-        if (!isTouchDevice) {
-            gsap.fromTo(starCanvas, { filter: 'brightness(2)' }, { filter: 'brightness(1)', duration: 0.6, ease: 'power2.out' });
-        }
+        gsap.fromTo(starCanvas, { filter: 'brightness(2)' }, { filter: 'brightness(1)', duration: 0.6, ease: 'power2.out' });
         pushStarsToBin(stars).catch(() => {});
     }
 
@@ -736,7 +734,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     updatePlaceBtn();
                 }
             }
-            if (stars.length !== oldCount && !isTouchDevice) {
+            if (stars.length !== oldCount) {
                 gsap.fromTo(starCanvas, { filter: 'brightness(1.15)' }, { filter: 'brightness(1)', duration: 0.8, ease: 'power2.out' });
             }
         }).catch(err => {
@@ -829,16 +827,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function startLoop() {
         if (raf) cancelAnimationFrame(raf);
-        const skipFrames = isTouchDevice ? 1 : 0;
-        let tick = 0;
         function loop() {
             animFrame++;
             if (animFrame > 100000) animFrame = 0;
-            tick++;
-            if (tick > skipFrames) {
-                tick = 0;
-                render();
-            }
+            render();
             raf = requestAnimationFrame(loop);
         }
         loop();

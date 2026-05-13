@@ -1,5 +1,5 @@
 /* ============================================================
-   阿玖 · 星座
+    阿玖 · 星云
    点阵星空 + 自动连线 + 留言 + 评论
    ============================================================ */
 
@@ -124,10 +124,6 @@ body {
 }
 .star-controls > * { pointer-events: auto; }
 
-.star-controls .hint-text {
-    width: 100%;
-}
-
 .star-counter {
     font-family: 'Inter', 'Noto Sans SC', sans-serif;
     font-size: 0.72rem;
@@ -206,13 +202,6 @@ body {
     box-shadow: none;
 }
 
-.hint-text {
-    font-size: 0.66rem;
-    color: rgba(255, 255, 255, 0.22);
-    letter-spacing: 0.06em;
-    text-align: center;
-}
-
 /* ---- toast ---- */
 /* ================================================================
    移动端优化
@@ -262,7 +251,7 @@ body {
 /* ---- 评论栏 ---- */
 .comment-bar {
     position: fixed;
-    bottom: 12%;
+    bottom: 8%;
     left: 50%;
     transform: translateX(-50%) translateY(10px);
     z-index: 4;

@@ -116,14 +116,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ================================================================
-    //  星座引擎
+    //  星云引擎
     // ================================================================
     const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/6a03621cadc21f119a8d9d2c';
     const JSONBIN_KEY = '$2a$10$9rUyzHWd75AJ1uZXkAjcluIaU5YgwsYhvYO.Im37XwVLunftKAJTS';
 
     let stars = [];           // [{id, name, msg, x, y, time, comments, links}]
-    // comments: [{author, text, time}]
-    // links: [starId] — 哪些星和我（myStarId）建立了连线
     let bgStars = [];
     let myStarId = null;
     let myStarName = '';
@@ -134,33 +132,57 @@ document.addEventListener('DOMContentLoaded', function () {
     let mouseX = -100, mouseY = -100;
     let animFrame = 0;
     let raf = null;
-    let mouseMoveRAF = null;             // mousemove 节流
-    let resizeTimer = null;              // resize 防抖
-    let isPushing = false;               // 写入保护，防止 sync 覆盖
-    let adminPanelOpen = false;          // 管理面板打开时暂停定时同步
-    const SKY_ID = 'seed_sky_2026';      // Sky 种子星 ID
-    const SKY_TIMESTAMP = 1700000000000; // Sky 固定时间戳
-    let skyStar = null;                   // 缓存 Sky 星引用
-    let longPressTimer = null;            // 长按计时器
-    let isLongPressing = false;           // 是否正在长按
+    let mouseMoveRAF = null;
+    let resizeTimer = null;
+    let isPushing = false;
+    let adminPanelOpen = false;
+    const SKY_ID = 'seed_sky_2026';
+    const SKY_TIMESTAMP = 1700000000000;
+    let skyStar = null;
+    let longPressTimer = null;
+    let isLongPressing = false;
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+    // ---- 镜头系统 ----
+    let camera = { x: 0, y: 0, zoom: 1 };
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let cameraAtDragStart = { x: 0, y: 0 };
+    const MIN_ZOOM = 0.4;
+    const MAX_ZOOM = 2.5;
 
     // 管理权限
     let adminAuthed = false;
+
+    // ---- 坐标转换 ----
+    function worldToScreen(wx, wy) {
+        return {
+            x: wx * canvasW * camera.zoom + camera.x,
+            y: wy * canvasH * camera.zoom + camera.y
+        };
+    }
+
+    function screenToWorld(sx, sy) {
+        return {
+            x: (sx - camera.x) / (canvasW * camera.zoom),
+            y: (sy - camera.y) / (canvasH * camera.zoom)
+        };
+    }
 
     // ---- 工具 ----
     function getMyStar() {
         return stars.find(s => s.id === myStarId) || null;
     }
 
-    // ---- 生成背景静态星 ----
     function generateBgStars() {
         bgStars = [];
-        const count = Math.floor((canvasW * canvasH) / 1800);
+        // 背景星覆盖范围要比可视区域大一圈，支持镜头平移
+        const pad = 400;
+        const count = Math.floor(((canvasW + pad * 2) * (canvasH + pad * 2)) / 1800);
         for (let i = 0; i < count; i++) {
             bgStars.push({
-                x: Math.random() * canvasW,
-                y: Math.random() * canvasH,
+                x: -pad + Math.random() * (canvasW + pad * 2),
+                y: -pad + Math.random() * (canvasH + pad * 2),
                 r: 0.3 + Math.random() * 1.0,
                 alpha: 0.15 + Math.random() * 0.35,
                 phase: Math.random() * Math.PI * 2
@@ -182,16 +204,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ---- 绘制 ----
     function drawBgStar(s) {
+        const sx = s.x * camera.zoom + camera.x;
+        const sy = s.y * camera.zoom + camera.y;
+        // 只绘制可视区域内的背景星
+        if (sx < -20 || sx > canvasW + 20 || sy < -20 || sy > canvasH + 20) return;
         const flicker = 0.7 + 0.3 * Math.sin(animFrame * 0.02 + s.phase);
         const alpha = s.alpha * flicker;
         starCtx.beginPath();
-        starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        starCtx.arc(sx, sy, s.r * camera.zoom, 0, Math.PI * 2);
         starCtx.fillStyle = `rgba(255,255,255,${alpha})`;
         starCtx.fill();
     }
 
     function drawConnection(from, to, type, starA, starB) {
-        // type: 'linked' | 'hover' | 'selected'
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -199,9 +224,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let refDist;
         if (type === 'linked') {
-            refDist = Math.sqrt(canvasW * canvasW + canvasH * canvasH) * 0.55;
+            refDist = Math.sqrt(canvasW * canvasW + canvasH * canvasH) * 0.55 * camera.zoom;
+        } else if (type === 'selected') {
+            refDist = Math.sqrt(canvasW * canvasW + canvasH * canvasH) * 0.35 * camera.zoom;
         } else {
-            refDist = Math.min(canvasW, canvasH) * 0.45;
+            refDist = Math.min(canvasW, canvasH) * 0.45 * camera.zoom;
         }
         const closeness = Math.max(0, 1 - dist / refDist);
 
@@ -210,28 +237,28 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'linked':
                 isLinked = true;
                 alpha = closeness * 0.7;
-                lineWidth = 1.2;
+                lineWidth = 1.2 * camera.zoom;
                 dash = [];
                 dashOffset = 0;
                 color = `rgba(184,134,11,${alpha})`;
                 break;
             case 'selected':
                 alpha = closeness * 0.7;
-                lineWidth = 0.8;
+                lineWidth = 0.8 * camera.zoom;
                 dash = [4, 6];
                 dashOffset = -animFrame * 0.5;
                 color = `rgba(220,220,255,${alpha})`;
                 break;
             case 'hover':
                 alpha = closeness * 0.6;
-                lineWidth = 0.6;
+                lineWidth = 0.6 * camera.zoom;
                 dash = [3, 6];
                 dashOffset = -animFrame * 0.35;
                 color = `rgba(255,255,255,${alpha})`;
                 break;
             default:
                 alpha = closeness * 0.12;
-                lineWidth = 0.25;
+                lineWidth = 0.25 * camera.zoom;
                 dash = [2, 10];
                 dashOffset = -animFrame * 0.08;
                 color = `rgba(255,255,255,${alpha})`;
@@ -261,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const px = from.x + dx * t;
                 const py = from.y + dy * t;
                 const dotAlpha = 0.35 + 0.45 * Math.sin(phase * Math.PI);
-                const dotR = 1.0 + 1.5 * Math.sin(phase * Math.PI);
+                const dotR = (1.0 + 1.5 * Math.sin(phase * Math.PI)) * camera.zoom;
                 const dotGrad = starCtx.createRadialGradient(px, py, 0, px, py, dotR);
                 dotGrad.addColorStop(0, `rgba(255,220,100,${dotAlpha})`);
                 dotGrad.addColorStop(0.4, `rgba(255,200,50,${dotAlpha * 0.6})`);
@@ -278,7 +305,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const px = from.x + dx * t;
                 const py = from.y + dy * t;
                 const dotAlpha = 0.35 + 0.45 * Math.sin(phase * Math.PI);
-                const dotR = 1.0 + 1.5 * Math.sin(phase * Math.PI);
+                const dotR = (1.0 + 1.5 * Math.sin(phase * Math.PI)) * camera.zoom;
                 const dotGrad = starCtx.createRadialGradient(px, py, 0, px, py, dotR);
                 dotGrad.addColorStop(0, `rgba(255,220,100,${dotAlpha})`);
                 dotGrad.addColorStop(0.4, `rgba(255,200,50,${dotAlpha * 0.6})`);
@@ -295,32 +322,33 @@ document.addEventListener('DOMContentLoaded', function () {
     function drawStarGlow(s, isHovered, isMine, isSelected) {
         const cx = s.x, cy = s.y;
         const baseR = isMine ? 3.5 : (isHovered || isSelected ? 4.5 : 2.5);
+        const scaledR = baseR * camera.zoom;
 
-        const glowGrad = starCtx.createRadialGradient(cx, cy, 0, cx, cy, baseR * 5);
+        const glowGrad = starCtx.createRadialGradient(cx, cy, 0, cx, cy, scaledR * 5);
         const glowAlpha = (isHovered || isSelected) ? 0.9 : 0.6;
         glowGrad.addColorStop(0, `rgba(255,255,255,${glowAlpha})`);
         glowGrad.addColorStop(0.2, `rgba(255,255,255,${glowAlpha * 0.5})`);
         glowGrad.addColorStop(0.5, `rgba(255,255,255,0.05)`);
         glowGrad.addColorStop(1, 'rgba(255,255,255,0)');
         starCtx.beginPath();
-        starCtx.arc(cx, cy, baseR * 5, 0, Math.PI * 2);
+        starCtx.arc(cx, cy, scaledR * 5, 0, Math.PI * 2);
         starCtx.fillStyle = glowGrad;
         starCtx.fill();
 
-        const coreGrad = starCtx.createRadialGradient(cx, cy, 0, cx, cy, baseR);
+        const coreGrad = starCtx.createRadialGradient(cx, cy, 0, cx, cy, scaledR);
         coreGrad.addColorStop(0, '#ffffff');
         coreGrad.addColorStop(0.6, 'rgba(255,255,255,0.8)');
         coreGrad.addColorStop(1, 'rgba(255,255,255,0)');
         starCtx.beginPath();
-        starCtx.arc(cx, cy, baseR, 0, Math.PI * 2);
+        starCtx.arc(cx, cy, scaledR, 0, Math.PI * 2);
         starCtx.fillStyle = coreGrad;
         starCtx.fill();
 
         if (isMine) {
             starCtx.beginPath();
-            starCtx.arc(cx, cy, baseR + 3, 0, Math.PI * 2);
+            starCtx.arc(cx, cy, scaledR + 3 * camera.zoom, 0, Math.PI * 2);
             starCtx.strokeStyle = 'rgba(184,134,11,0.6)';
-            starCtx.lineWidth = 0.8;
+            starCtx.lineWidth = 0.8 * camera.zoom;
             starCtx.setLineDash([2, 3]);
             starCtx.lineDashOffset = -animFrame * 0.5;
             starCtx.stroke();
@@ -329,9 +357,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (isSelected && !isMine) {
             starCtx.beginPath();
-            starCtx.arc(cx, cy, baseR + 3.5, 0, Math.PI * 2);
+            starCtx.arc(cx, cy, scaledR + 3.5 * camera.zoom, 0, Math.PI * 2);
             starCtx.strokeStyle = 'rgba(255,255,255,0.45)';
-            starCtx.lineWidth = 0.7;
+            starCtx.lineWidth = 0.7 * camera.zoom;
             starCtx.setLineDash([2, 4]);
             starCtx.lineDashOffset = -animFrame * 0.4;
             starCtx.stroke();
@@ -339,9 +367,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (isHovered) {
-            const crossLen = baseR + 6;
+            const crossLen = scaledR + 6 * camera.zoom;
             starCtx.strokeStyle = 'rgba(255,255,255,0.5)';
-            starCtx.lineWidth = 0.4;
+            starCtx.lineWidth = 0.4 * camera.zoom;
             starCtx.beginPath();
             starCtx.moveTo(cx - crossLen, cy);
             starCtx.lineTo(cx + crossLen, cy);
@@ -365,42 +393,59 @@ document.addEventListener('DOMContentLoaded', function () {
         function setConn(a, b, type) {
             const key = connKey(a, b);
             const existing = connMap.get(key);
-            const order = { linked: 3, hover: 2, selected: 2, ambient: 1 };
+            const order = { linked: 3, selected: 2, hover: 1, ambient: 0 };
             if (!existing || order[type] > order[existing]) {
                 connMap.set(key, type);
             }
         }
 
         const diagonal = Math.sqrt(canvasW * canvasW + canvasH * canvasH);
-        const linkedMaxDist = diagonal * 0.55;
-        const highlightMaxDist = diagonal * 0.35;
+        const linkedMaxDist = diagonal * 0.55 * camera.zoom;
+        const highlightMaxDist = diagonal * 0.35 * camera.zoom;
 
+        // ---- 连线逻辑 ----
         for (let i = 0; i < stars.length; i++) {
             const si = stars[i];
             const six = si.x * canvasW;
             const siy = si.y * canvasH;
+            const { x: sx, y: sy } = worldToScreen(si.x, si.y);
 
             for (let j = i + 1; j < stars.length; j++) {
                 const sj = stars[j];
                 const sjx = sj.x * canvasW;
                 const sjy = sj.y * canvasH;
                 const dist = Math.sqrt((six - sjx) ** 2 + (siy - sjy) ** 2);
+                const screenDist = dist * camera.zoom;
 
                 const mutualLinked =
                     (si.links && si.links.includes(sj.id)) ||
                     (sj.links && sj.links.includes(si.id));
                 if (mutualLinked) {
-                    if (dist < linkedMaxDist) {
+                    if (screenDist < linkedMaxDist) {
                         setConn(si.id, sj.id, 'linked');
                     }
                     continue;
                 }
 
-                if (dist > highlightMaxDist) continue;
+                if (screenDist > highlightMaxDist) continue;
                 if (si.id === hoveredId || sj.id === hoveredId) {
                     setConn(si.id, sj.id, 'hover');
-                } else if (si.id === selectedStarId || sj.id === selectedStarId) {
-                    setConn(si.id, sj.id, 'selected');
+                }
+                // selected 不再辐射所有近星，改为只在后面专门处理 single-selected
+            }
+        }
+
+        // selectedStarId 专用：仅显示 我 ↔ 选中星 一条虚线
+        if (selectedStarId && myStarId && selectedStarId !== myStarId) {
+            const selStar = stars.find(s => s.id === selectedStarId);
+            const myStar = stars.find(s => s.id === myStarId);
+            if (selStar && myStar) {
+                const dx = (selStar.x - myStar.x) * canvasW;
+                const dy = (selStar.y - myStar.y) * canvasH;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const screenDist = dist * camera.zoom;
+                if (screenDist < highlightMaxDist) {
+                    setConn(myStar.id, selStar.id, 'selected');
                 }
             }
         }
@@ -410,17 +455,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const starA = stars.find(s => s.id === idA);
             const starB = stars.find(s => s.id === idB);
             if (starA && starB) {
-                drawConnection(
-                    { x: starA.x * canvasW, y: starA.y * canvasH },
-                    { x: starB.x * canvasW, y: starB.y * canvasH },
-                    type, starA, starB
-                );
+                const a = worldToScreen(starA.x, starA.y);
+                const b = worldToScreen(starB.x, starB.y);
+                drawConnection(a, b, type, starA, starB);
             }
         });
 
         stars.forEach(s => {
-            const sx = s.x * canvasW;
-            const sy = s.y * canvasH;
+            const { x: sx, y: sy } = worldToScreen(s.x, s.y);
             const isHovered = s.id === hoveredId;
             const isMine = s.id === myStarId;
             const isSelected = s.id === selectedStarId;
@@ -428,14 +470,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // ---- 检测悬停 ----
+    // ---- 检测悬停（考虑镜头） ----
     function hitTest(mx, my) {
-        const hitRadius = 18;
+        const hitRadius = 18 * camera.zoom;
         let closest = null;
         let closestDist = Infinity;
         for (const s of stars) {
-            const sx = s.x * canvasW;
-            const sy = s.y * canvasH;
+            const { x: sx, y: sy } = worldToScreen(s.x, s.y);
             const dx = mx - sx;
             const dy = my - sy;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -453,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tooltip.classList.remove('show');
             tooltipComments.innerHTML = '';
             tooltipComments.classList.remove('has-comments');
-            starCanvas.style.cursor = 'crosshair';
+            starCanvas.style.cursor = isDragging ? 'grabbing' : 'crosshair';
             return;
         }
         hoveredId = s.id;
@@ -463,8 +504,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (s.comments && s.comments.length > 0) {
             tooltipComments.classList.add('has-comments');
-            tooltipComments.innerHTML = s.comments.slice(-3).map((c, idx) => {
-                const actualIdx = s.comments.length - Math.min(3, s.comments.length) + idx;
+            const showAll = (s.id === myStarId || s.id === SKY_ID);
+            const displayedComments = showAll ? s.comments : s.comments.slice(-3);
+            tooltipComments.innerHTML = displayedComments.map((c, idx) => {
+                const actualIdx = showAll ? idx : (s.comments.length - Math.min(3, s.comments.length) + idx);
                 const canDelete = (c.author === myStarName) || adminAuthed;
                 const delBtn = canDelete
                     ? '<span class="comment-delete" data-idx="' + actualIdx + '" data-starid="' + s.id + '">⨯</span>'
@@ -519,12 +562,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         pushStarsToBin(stars).catch(() => {});
-        showToast('🗑 评论已删除');
+        showToast('评论已删除');
         const hit = hitTest(mouseX, mouseY);
         if (hit) updateTooltip(hit, mouseX, mouseY);
     }
 
-    // ---- 放星 ----
+    // ---- 放星（含斥力算法） ----
     function placeStar(rawX, rawY) {
         if (placed) return;
 
@@ -534,14 +577,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const displayName = name.slice(0, 8);
         const displayMsg = msg.slice(0, 20);
 
+        // 斥力检测：距现有星最小间距
+        const { x: worldX, y: worldY } = screenToWorld(rawX, rawY);
+        const MIN_SPACING = 0.04; // 归一化坐标下最小间距
+        for (const s of stars) {
+            const dx = worldX - s.x;
+            const dy = worldY - s.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < MIN_SPACING) {
+                showToast('此处离其他星太近，请换个位置');
+                return;
+            }
+        }
+
         const id = 'star_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-        const x = rawX / canvasW;
-        const y = rawY / canvasH;
 
         const newStar = {
             id, name: displayName, msg: displayMsg, comments: [], links: [],
-            x: Math.max(0.02, Math.min(0.98, parseFloat(x.toFixed(4)))),
-            y: Math.max(0.05, Math.min(0.90, parseFloat(y.toFixed(4)))),
+            x: Math.max(0.02, Math.min(0.98, parseFloat(worldX.toFixed(4)))),
+            y: Math.max(0.05, Math.min(0.90, parseFloat(worldY.toFixed(4)))),
             time: Date.now()
         };
 
@@ -552,7 +606,7 @@ document.addEventListener('DOMContentLoaded', function () {
         savePlacedFlag();
         updatePlaceBtn();
         updateCounter();
-        showToast('✨ 你的星已点亮');
+        showToast('你的星已点亮');
         gsap.fromTo(starCanvas, { filter: 'brightness(2)' }, { filter: 'brightness(1)', duration: 0.6, ease: 'power2.out' });
         pushStarsToBin(stars).catch(() => {});
     }
@@ -591,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function () {
         starToast.textContent = msg;
         gsap.set(starToast, { opacity: 1, y: 0 });
         gsap.to(starToast, {
-            opacity: 0, y: -20, duration: 2.2, delay: 1.5, ease: 'power2.in',
+            opacity: 0, y: -20, duration: 1.6, delay: 1.0, ease: 'power2.in',
             onComplete: () => { starToast.style.opacity = '0'; }
         });
     }
@@ -600,7 +654,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function openCommentBar(star) {
         if (!star) return;
         if (!placed || !myStarId) {
-            showToast('请先点亮你自已的星，才能评论他人');
+            showToast('请先点亮你自已的星');
             return;
         }
         selectedStarId = star.id;
@@ -650,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             pushStarsToBin(stars).catch(() => {});
-            showToast('💬 评论已发送 · 链接已建立');
+            showToast('评论已发送');
             const hit = hitTest(mouseX, mouseY);
             if (hit && hit.id === selectedStarId) {
                 updateTooltip(hit, mouseX, mouseY);
@@ -719,7 +773,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (isPushing) return;
             saveLocalStars(remote);
             const oldCount = stars.length;
-            // 远程数据为权威源，不再合并本地（避免管理员删除后被本地恢复）
             stars = remote.slice();
             updateCounter();
             if (myStarId) {
@@ -727,7 +780,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (my) {
                     myStarName = my.name;
                 } else {
-                    // 星已被管理员删除，清除 placed 状态允许重新点亮
                     myStarId = null;
                     placed = false;
                     try { localStorage.removeItem('ajiu_star_placed'); } catch (e) {}
@@ -747,26 +799,83 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // ==================== 事件 ====================
-    function onMouseMove(e) {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
-        if (mouseMoveRAF) return;
-        mouseMoveRAF = requestAnimationFrame(() => {
-            mouseMoveRAF = null;
-            const hit = hitTest(mouseX, mouseY);
-            updateTooltip(hit, mouseX, mouseY);
-        });
+    // ==================== 镜头事件 ====================
+    function onMouseDown(e) {
+        // 检查是否点击在星上，如果是则不启动拖动
+        const hit = hitTest(e.clientX, e.clientY);
+        if (hit) return; // 点击星时不拖动
+
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        cameraAtDragStart.x = camera.x;
+        cameraAtDragStart.y = camera.y;
+        starCanvas.style.cursor = 'grabbing';
+        starCanvas.setPointerCapture(e.pointerId);
     }
 
-    function onClick(e) {
+    function onMouseMoveGlobal(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+
+        if (isDragging) {
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            camera.x = cameraAtDragStart.x + dx;
+            camera.y = cameraAtDragStart.y + dy;
+            starCanvas.style.cursor = 'grabbing';
+            // 拖动时隐藏 tooltip
+            if (hoveredId !== null) {
+                hoveredId = null;
+                tooltip.classList.remove('show');
+                tooltipComments.innerHTML = '';
+                tooltipComments.classList.remove('has-comments');
+            }
+        } else {
+            if (mouseMoveRAF) return;
+            mouseMoveRAF = requestAnimationFrame(() => {
+                mouseMoveRAF = null;
+                const hit = hitTest(mouseX, mouseY);
+                updateTooltip(hit, mouseX, mouseY);
+            });
+        }
+    }
+
+    function onMouseUp(e) {
+        if (isDragging) {
+            isDragging = false;
+            starCanvas.style.cursor = 'crosshair';
+        }
+    }
+
+    function onWheel(e) {
+        e.preventDefault();
+        const zoomBefore = camera.zoom;
+        const delta = -e.deltaY * 0.001;
+        camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom * (1 + delta)));
+
+        // 以鼠标位置为中心缩放
+        const zoomRatio = camera.zoom / zoomBefore;
+        camera.x = e.clientX - (e.clientX - camera.x) * zoomRatio;
+        camera.y = e.clientY - (e.clientY - camera.y) * zoomRatio;
+
+        // 缩放后更新 hover
+        const hit = hitTest(mouseX, mouseY);
+        updateTooltip(hit, mouseX, mouseY);
+    }
+
+    // ==================== 点击 / 互动事件 ====================
+    function onClickCanvas(e) {
+        // 如果刚拖动过（移动距离 > 3px），忽略点击
+        if (isDragging) return;
+
         const controlsH = 200;
         if (e.clientY > canvasH - controlsH) return;
 
         const hit = hitTest(e.clientX, e.clientY);
         if (hit) {
             if (hit.id === myStarId) {
-                showToast('✨ 这是你的星');
+                showToast('这是你的星');
                 return;
             }
             if (hit.id === SKY_ID) {
@@ -794,6 +903,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const hit = hitTest(e.clientX, e.clientY);
         if (!hit || hit.id !== SKY_ID) {
             cancelLongPress();
+            // 没有命中 Sky 星 → 可能是拖动
+            if (!hit) onMouseDown(e);
             return;
         }
         isLongPressing = false;
@@ -805,6 +916,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function onPointerUp(e) {
+        cancelLongPress();
+        onMouseUp(e);
         setTimeout(() => {
             cancelLongPress();
         }, 100);
@@ -919,19 +1032,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 pushStarsToBin(stars).catch(() => {});
-                showToast('✅ 已保存');
+                showToast('已保存');
                 if (myStarId === star.id) myStarName = star.name;
             });
 
             card.querySelector('.admin-del-star').addEventListener('click', () => {
                 if (confirm('确定删除这颗星 "' + (star.name || '无名') + '" 吗？')) {
+                    const deletedName = star.name;
+                    // 1. 删除该星
                     stars = stars.filter(s => s.id !== star.id);
+                    // 2. 清理其他星的 links
                     stars.forEach(s => {
                         if (s.links) s.links = s.links.filter(lid => lid !== star.id);
                     });
+                    // 3. 清理该作者在其他星下的评论
+                    if (deletedName) {
+                        stars.forEach(s => {
+                            if (s.comments && s.comments.length > 0) {
+                                s.comments = s.comments.filter(c => c.author !== deletedName);
+                            }
+                        });
+                    }
                     pushStarsToBin(stars).catch(() => {});
                     updateCounter();
-                    showToast('🗑 星已删除');
+                    showToast('星已删除');
                     renderAdminList();
                 }
             });
@@ -958,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', function () {
     adminClose.addEventListener('click', closeAdmin);
     adminLoginBtn.addEventListener('click', adminAuth);
     adminPw.addEventListener('keydown', (e) => { if (e.key === 'Enter') adminAuth(); });
-    adminRefresh.addEventListener('click', () => { syncStars(); setTimeout(renderAdminList, 500); showToast('🔄 已刷新'); });
+    adminRefresh.addEventListener('click', () => { syncStars(); setTimeout(renderAdminList, 500); showToast('已刷新'); });
     adminLogout.addEventListener('click', adminDoLogout);
 
     starCanvas.addEventListener('click', function (e) {
@@ -998,7 +1122,6 @@ document.addEventListener('DOMContentLoaded', function () {
         loadPlacedFlag();
 
         function initWithData(remote) {
-            // 远程数据为权威源，不再合并本地（避免管理员删除后被本地恢复）
             stars = remote.slice();
 
             let seedInserted = false;
@@ -1028,7 +1151,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     placed = true;
                     updatePlaceBtn();
                 } else {
-                    // 星已被管理员删除，清除 placed 状态允许重新点亮
                     myStarId = null;
                     placed = false;
                     try { localStorage.removeItem('ajiu_star_placed'); } catch (e) {}
@@ -1048,20 +1170,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
         startLoop();
 
-        window.addEventListener('mousemove', onMouseMove, { passive: true });
-        starCanvas.addEventListener('click', onClick);
+        // 镜头事件
+        window.addEventListener('mousemove', onMouseMoveGlobal, { passive: true });
         starCanvas.addEventListener('pointerdown', onPointerDown);
         starCanvas.addEventListener('pointerup', onPointerUp);
         starCanvas.addEventListener('pointerleave', onPointerUp);
         starCanvas.addEventListener('pointercancel', onPointerUp);
         starCanvas.addEventListener('contextmenu', e => e.preventDefault());
         starCanvas.style.touchAction = 'none';
+        starCanvas.addEventListener('wheel', onWheel, { passive: false });
+
+        // 点击事件（分离出来避免与拖动冲突）
+        starCanvas.addEventListener('click', onClickCanvas);
+
         placeBtn.addEventListener('click', () => {
             if (placed) return;
             const name = nameInput.value.trim();
             if (!name) { showToast('请先填写你的名字'); return; }
-            const cx = canvasW / 2 + (Math.random() - 0.5) * canvasW * 0.4;
-            const cy = canvasH * 0.3 + Math.random() * canvasH * 0.35;
+            // 屏幕中心附近随机位置
+            const cx = canvasW / 2 + (Math.random() - 0.5) * canvasW * 0.3;
+            const cy = canvasH * 0.35 + Math.random() * canvasH * 0.25;
             placeStar(cx, cy);
         });
         window.addEventListener('resize', onResize);
